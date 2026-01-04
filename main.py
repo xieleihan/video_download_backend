@@ -2,10 +2,14 @@ from typing import Union
 from datetime import datetime
 import uvicorn
 import logging
+from dotenv import load_dotenv
 
 from fastapi import FastAPI
 
 from router.video_router import router as video_router
+
+# 加载 .env 文件
+load_dotenv()
 
 # 配置日志
 logging.basicConfig(
