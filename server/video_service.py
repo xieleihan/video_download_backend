@@ -23,7 +23,6 @@ class VideoService:
         Args:
             video_url: 视频链接
             video_type: 视频类型 (youtube/tiktok/twitter)
-            wopan_access_token: 联通网盘 Access Token
             
         Returns:
             Dict 包含下载结果
