@@ -2,9 +2,12 @@ from typing import Union
 from datetime import datetime
 import uvicorn
 import logging
+from pathlib import Path
 from dotenv import load_dotenv
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 from router.video_router import router as video_router
 
@@ -24,8 +27,21 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # 注册路由
 app.include_router(video_router)
+
+# 挂载静态文件
+static_dir = Path(__file__).parent / "static"
+static_dir.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(static_dir), html=True), name="static")
 
 @app.get("/healthy")
 def healthy() -> Union[dict, str]:

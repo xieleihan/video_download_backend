@@ -5,3 +5,4 @@ pydantic
 python-dotenv
 requests
 pyaes
+python-multipart

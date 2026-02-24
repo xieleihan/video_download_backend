@@ -1,8 +1,10 @@
 import logging
 import os
+import uuid
+from pathlib import Path
 from typing import Dict, Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel, Field
 
 from server.video_service import VideoService
@@ -112,4 +114,68 @@ async def upload_to_wopan(request: WopanUploadRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail=f"文件不存在: {str(e)}")
     except Exception as e:
         logger.error(f"上传到联通网盘失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"上传失败: {str(e)}")
+
+
+@router.post("/wopan/file-upload")
+async def upload_file_to_wopan(
+    file: UploadFile = File(...),
+    directory_id: str = Form("0")
+) -> Dict[str, Any]:
+    """
+    浏览器文件上传到联通网盘接口
+
+    - **file**: 上传的文件
+    - **directory_id**: 目标目录 ID (可选，默认为根目录 "0")
+    """
+    try:
+        access_token = os.getenv("WOPAN_ACCESS_TOKEN")
+        if not access_token:
+            raise HTTPException(status_code=500, detail="未配置 WOPAN_ACCESS_TOKEN")
+
+        # 保存到临时目录
+        temp_dir = Path(__file__).parent.parent / "temp" / "uploads"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+
+        # 保留原始文件名，用 uuid 防冲突
+        suffix = Path(file.filename).suffix
+        safe_name = f"{uuid.uuid4().hex}{suffix}"
+        temp_path = temp_dir / safe_name
+
+        with open(temp_path, "wb") as f:
+            while chunk := await file.read(8 * 1024 * 1024):
+                f.write(chunk)
+
+        logger.info(f"文件已保存到临时路径: {temp_path}")
+
+        # 上传到联通网盘（使用原始文件名）
+        # 临时重命名以保留原始文件名
+        original_path = temp_dir / file.filename
+        renamed = False
+        if not original_path.exists():
+            temp_path.rename(original_path)
+            renamed = True
+            upload_path = original_path
+        else:
+            upload_path = temp_path
+
+        try:
+            uploader = WopanUploader(access_token)
+            result = uploader.upload(str(upload_path), directory_id)
+        finally:
+            # 清理临时文件
+            upload_path.unlink(missing_ok=True)
+            if renamed and temp_path.exists():
+                temp_path.unlink(missing_ok=True)
+
+        return {
+            "status": "success",
+            "message": f"文件 {file.filename} 上传到联通网盘成功",
+            "data": result
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"文件上传失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"上传失败: {str(e)}")
